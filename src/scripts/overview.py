@@ -1,7 +1,8 @@
 import argparse
-
 import polars as pl
+
 import defines
+
 
 def overview(path: str) -> None:
     df = pl.read_parquet(path)

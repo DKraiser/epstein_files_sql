@@ -4,6 +4,7 @@ import argparse
 import defines
 from huggingface_hub import hf_hub_download
 
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--full", action="store_true", help="download every path in FULL_FILES")
