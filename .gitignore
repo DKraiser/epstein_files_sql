@@ -1,0 +1,9 @@
+data/*
+!data/LICENSE
+!data/README.md
+!data/PROVENANCE.md
+
+mnt/
+.env
+.venv/
+__pycache__/
