@@ -26,7 +26,7 @@ def main():
     pl.Config.set_tbl_cols(-1)
 
     for path in paths: 
-        print('=' * 10 + path.title().split('/')[-1] + '=' * 10)
+        print('=' * 10 + path[0].title().split('/')[-1] + '=' * 10)
         overview(f"{defines.PROJECT_ROOT}/data/{path}")
         print()
 

@@ -9,9 +9,10 @@ REVISION = "133ef9f0a539fafc270cde8fa8638dc38d89968d"
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PROJECT_ENV = PROJECT_ROOT / ".env"
 
-DEFAULT_FILES_PATHS = (
-    "data/documents/documents-00000-of-00015.parquet",
-    "data/chunks/chunks-00000-of-00011.parquet",
+DEFAULT_FILES_PATHS: tuple[list[str], ...] = (
+    [ "data/documents/documents-00000-of-00015.parquet" ],
+    [ "data/chunks/chunks-00000-of-00011.parquet" ]
 )
 
-FULL_FILES_PATHS: tuple[str, ...] = ()
+
+FULL_FILES_PATHS: tuple[list[str], ...] = ()
