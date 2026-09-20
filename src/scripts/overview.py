@@ -27,7 +27,7 @@ def main():
 
     for path in paths: 
         print('=' * 10 + path[0].title().split('/')[-1] + '=' * 10)
-        overview(f"{defines.PROJECT_ROOT}/data/{path}")
+        overview(f"{defines.PROJECT_ROOT}/data/{path[0]}")
         print()
 
 if __name__ == "__main__":

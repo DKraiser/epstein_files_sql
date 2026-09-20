@@ -59,6 +59,7 @@ src/.venv/bin/python src/scripts/download.py
 # data/chunks/chunks-00000-of-00011 are shown
 src/.venv/bin/python src/scripts/overview.py
 
-src/.venv/bin/python src/scripts/import.py
+# Imports data for checkpoint 1
+src/.venv/bin/python src/scripts/small_import.py
 
 ```
