@@ -1,7 +1,7 @@
 -- Drop dependent tables before the tables they reference.
 DROP TABLE IF EXISTS chunks;
 DROP TABLE IF EXISTS documents;
-DROP TABLE IF EXISTS documents_types;
+DROP TABLE IF EXISTS document_types;
 DROP TABLE IF EXISTS ocr_sources;
 DROP TABLE IF EXISTS datasets;
 
