@@ -8,5 +8,4 @@ services:
       - .env
     volumes:
       - ./mnt/:/var/lib/postgresql/18/docker
-    
-
+      - ./src/:/src
