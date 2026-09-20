@@ -26,7 +26,7 @@ CREATE TABLE documents(
     dataset SMALLINT REFERENCES datasets(id) ON DELETE RESTRICT,
     full_text TEXT,
     document_type SMALLINT REFERENCES document_types(id) ON DELETE RESTRICT,
-    date DATE,
+    date TEXT,
     is_photo BOOLEAN,
     has_handwriting BOOLEAN,
     has_stamps BOOLEAN,
