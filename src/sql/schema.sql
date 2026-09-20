@@ -22,20 +22,20 @@ CREATE TABLE ocr_sources(
 
 CREATE TABLE documents(
     id BIGSERIAL PRIMARY KEY,
-    file_key TEXT,
+    created_at TIMESTAMP,
+    char_count INTEGER,
     dataset SMALLINT REFERENCES datasets(id) ON DELETE RESTRICT,
-    full_text TEXT,
     document_type SMALLINT REFERENCES document_types(id) ON DELETE RESTRICT,
-    date TEXT,
-    is_photo BOOLEAN,
-    has_handwriting BOOLEAN,
-    has_stamps BOOLEAN,
     ocr_source SMALLINT REFERENCES ocr_sources(id) ON DELETE RESTRICT,
+    is_photo BOOLEAN,
+    has_stamps BOOLEAN,
+    has_handwriting BOOLEAN,
+    file_key TEXT,
+    full_text TEXT,
+    date TEXT,
     additional_notes TEXT,
     page_number TEXT,
     document_number TEXT,
-    char_count INTEGER,
-    created_at TIMESTAMP,
     email_fields JSONB
 );
 
@@ -43,10 +43,10 @@ CREATE TABLE chunks(
     id BIGSERIAL PRIMARY KEY,
     document_id BIGINT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
     chunk_index INTEGER,
-    content TEXT,
     token_count INTEGER,
     char_start INTEGER,
     char_end INTEGER,
+    content TEXT,
 
     UNIQUE (document_id, chunk_index)
 );
