@@ -27,7 +27,7 @@ def create_conninfo() -> str:
     return make_conninfo(
         host=os.getenv("POSTGRES_HOST", "localhost"),
         port=os.getenv("POSTGRES_PORT", "5433"),
-        dbname=os.getenv("POSTGRES_DB", "dbs2"),
+        dbname=os.getenv("POSTGRES_DBNAME", os.getenv("POSTGRES_DB", "dbs2")),
         user=os.getenv("POSTGRES_USER", "postgres"),
         password=password,
     )

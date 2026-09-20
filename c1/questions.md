@@ -1,0 +1,1 @@
+- Selected chunks do not contain any substring "flight", so questions in part "Searching" of chapter 4 make no sense.

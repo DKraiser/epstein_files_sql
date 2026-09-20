@@ -1,0 +1,4 @@
+repository: kabasshouse/epstein-data
+revision: 133ef9f0a539fafc270cde8fa8638dc38d89968d
+path: data/chunks/chunks-00000-of-00011.parquet
+sha256: a981d273fec089a29a4974e3a2af050202679a1866d7d697838ff4b0b3a8a652
