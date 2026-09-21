@@ -100,10 +100,10 @@ c1/src/.venv/bin/python c1/src/python/small_import.py
 
 | Precise lookup target         | Operator          | Index     | Risk                                                              |
 | ----------------------------- | ----------------- | --------- | ----------------------------------------------------------------- |
-| `file_key` (`documents`)      | `=`               | B-tree    | Optimizer can choose sequential scan strategy so index is unused  |
-| substring                     | `LIKE`, `ILIKE`   | GIN       | For large text GIN using `pg_trgm` extension grows very fast      |
-| `JSONB` containment           | `@>`, `@<`        | GIN       | Index grows very fast                                             |
-| Time range in append-only log | `<=>`             | B-tree    | As log continuously grows, index becomes giant                    |
+| `file_key`      | `=`               | B-tree, B+tree    | Optimizer can choose sequential scan strategy so index is unused  |
+| substring                     | `LIKE`, `ILIKE`   | GIN, GIST         | For large text GIN using `pg_trgm` extension grows very fast      |
+| `JSONB` containment           | `@>`, `@<`        | GIN, RUM          | Index grows very fast                                             |
+| Time range in append-only log | `<=>`, `BETWEEN`             | B-tree, B+tree, BRIN      | As log continuously grows, index becomes giant                    |
 
 # AI statement analysis
 
