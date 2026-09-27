@@ -6,7 +6,7 @@ from huggingface_hub import hf_hub_download
 
 
 def main() -> None:
-    paths = defines.FULL_FILES_PATHS
+    paths = (*defines.FULL_FILES_PATHS, ["README.md", "PROVENANCE.md", "LICENSE"])
 
     for group in paths:
         for filename in group:
