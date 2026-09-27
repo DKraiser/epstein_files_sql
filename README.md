@@ -56,9 +56,6 @@ source src/.venv/bin/activate
 src/.venv/bin/python -m pip install -r src/requirements.txt
 
 # Download needed .parquet files
-# Unless flag --full is provided, only 
-# data/documents/documents-00000-of-00015 and 
-# data/chunks/chunks-00000-of-00011 are downloaded
 src/.venv/bin/python src/python/download.py
 
 # Overview dataset structure
