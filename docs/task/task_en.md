@@ -147,8 +147,6 @@ Use PostgreSQL in a container or an equally reproducible environment. Specify th
 
 In `source-manifest.json`, record the repo ID, full commit SHA, download time, and version of the download tool. For each of the 56 files, specify the path, byte count, SHA-256 calculated from the content, and number of lines. Verify the completeness of the shards and their consistency with the manifest before importing.
 
-Student Materials | September 14, 2026
-
 ### **Profiling**
 
 In `data-profile.md`, document the source schema, counts, NULL/empty values, candidate keys, duplicates, and invalid references for at least documents, entities, event_sources, financial_transactions, and provenance/files. Determine the results using your own scripts. You can use DuckDB, Polars, or PyArrow to work with Parquet; the target remains PostgreSQL.

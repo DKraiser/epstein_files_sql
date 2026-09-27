@@ -26,4 +26,4 @@ docker exec postgres-dbs2 \
     --username "$POSTGRES_USER" --dbname "$POSTGRES_DBNAME" \
     --file "/src/sql/seed.sql"
 
-"$PROJECT_ROOT/src/.venv/bin/python" "$PROJECT_ROOT/src/python/import.py"
+"python" "$PROJECT_ROOT/src/python/import.py"

@@ -27,19 +27,20 @@ docker compose up
 # Create and activate python environment
 python3 -m venv src/.venv 
 source src/.venv/bin/activate
-src/.venv/bin/python -m pip install -r src/requirements.txt
+PYTHONPATH="$(pwd)/src"
+python -m pip install -r src/requirements.txt
 
 # Download needed .parquet files
-src/.venv/bin/python src/python/download.py
+python src/python/download.py
 
 # Overview dataset structure
-src/.venv/bin/python src/python/overview.py
+python src/python/overview.py
 
 # --------------------------------------------------------
 # Manually run `src/sql/schema.sql` and `src/sql/seed.sql` 
 
 # And import data from dataset
-src/.venv/bin/python src/python/import.py
+python src/python/import.py
 
 # Or for Linux/MacOS simply run reimporter script
 ./reimport.sh 
