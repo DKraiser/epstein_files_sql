@@ -3,7 +3,12 @@ data/*
 !data/README.md
 !data/PROVENANCE.md
 
-mnt/
 .env
+mnt/
 .venv/
 __pycache__/
+observations/
+
+.agents/
+.codex/
+prompt.md

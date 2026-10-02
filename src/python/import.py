@@ -13,10 +13,6 @@ from psycopg.types.json import Jsonb
 
 import defines
 
-BASE_PATH = defines.PROJECT_ROOT / "data"
-DOCUMENTS_PATHS = [BASE_PATH / path for path in defines.DEFAULT_FILES_PATHS[0]]
-CHUNKS_PATHS = [BASE_PATH / path for path in defines.DEFAULT_FILES_PATHS[1]]
-
 def create_conninfo() -> str:
     """Return PostgreSQL connection information from the project .env file."""
     load_dotenv(defines.PROJECT_ENV)
@@ -68,7 +64,7 @@ def foreign_key(lookup: dict[str, int], value: str | None, column_name: str) -> 
             "Seed the lookup table before importing."
         ) from error
 
-def import_documents(conninfo: str, documents: pl.DataFrame, document_types: list[Any]) -> None: 
+def import_documents_and_document_types(conninfo: str, documents: pl.DataFrame, document_types: list[Any]) -> None: 
     with connect(conninfo) as connection:
         with connection.transaction():
             with connection.cursor() as cursor:
@@ -151,14 +147,13 @@ def import_chunks(conninfo: str, chunks: pl.DataFrame) -> None:
 
 def main() -> None:
     documents = (
-        pl.read_parquet(DOCUMENTS_PATHS)
+        pl.read_parquet(defines.LOCAL_FILES_PATHS["documents"])
         .sort("id")
-        .head(1_000)
         .with_columns(pl.col("ocr_source").fill_null("gemini"))
     )
 
     document_types = sorted(
-        pl.scan_parquet(DOCUMENTS_PATHS)
+        pl.scan_parquet(defines.LOCAL_FILES_PATHS["documents"])
         .select("document_type")
         .collect()["document_type"]
         .drop_nulls()
@@ -167,7 +162,7 @@ def main() -> None:
     )
 
     chunks = (
-        pl.read_parquet(CHUNKS_PATHS)
+        pl.read_parquet(defines.LOCAL_FILES_PATHS["chunks"])
         .join(
             documents.select("id"),
             left_on="document_id",
@@ -178,16 +173,16 @@ def main() -> None:
 
     conninfo = create_conninfo()
     try: 
-        import_documents(conninfo, documents, document_types)
+        import_documents_and_document_types(conninfo, documents, document_types)
     except Exception as e: 
         print ("Importing documents failed")
         print (e)
 
-    try:
-        import_chunks(conninfo, chunks)
-    except Exception as e: 
-        print ("Importing chunks failed")
-        print (e)
+    # try:
+    #     import_chunks(conninfo, chunks)
+    # except Exception as e: 
+    #     print ("Importing chunks failed")
+    #     print (e)
 
 
 

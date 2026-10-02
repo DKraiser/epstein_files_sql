@@ -25,10 +25,10 @@
 docker compose up
 
 # Create and activate python environment
-python3 -m venv src/.venv 
-source src/.venv/bin/activate
-PYTHONPATH="$(pwd)/src"
-python -m pip install -r src/requirements.txt
+python3 -m venv src/.venv && \
+    source src/.venv/bin/activate && \
+    export PYTHONPATH="$(pwd)/src" && \
+    python -m pip install -r src/requirements.txt
 
 # Download needed .parquet files
 python src/python/download.py

@@ -1,5 +1,6 @@
+# Data mappings
 
-# Data mapping 
+> Earlier draft. The complete, source-verified mapping is in [data-mapping.md](data-mapping.md).
 
 ## `documents`
 
@@ -8,9 +9,9 @@
 | `id`                  |  Int64       | BIGSERIAL      |                                   |
 | `created_at`          |  String      | TIMESTAMP      |                                   |
 | `char_count`          |  String      | INTEGER        |                                   |
-| `dataset`             |  String      | SMALLINT       | FK to `datasets` enum table       |
-| `document_type`       |  String      | SMALLINT       | FK to `document_types` enum table |
-| `ocr_source`          |  String      | SMALLINT       | FK to `ocr_sources` enum table    |
+| `dataset`             |  String      | SMALLINT       | FK to `enum_datasets`             |
+| `document_type`       |  String      | SMALLINT       | FK to `enum_document_types`       |
+| `ocr_source`          |  String      | SMALLINT       | FK to `enum_ocr_sources`          |
 | `is_photo`            |  Boolean     | BOOLEAN        |                                   |
 | `has_stamps`          |  Boolean     | BOOLEAN        |                                   |
 | `has_handwriting`     |  Boolean     | BOOLEAN        |                                   |
@@ -33,3 +34,5 @@
 | `char_start`  | Int32         | INTEGER       |                              |
 | `char_end`    | Int32         | INTEGER       |                              |
 | `content`     | String        | TEXT          |                              |
+
+## `files`
