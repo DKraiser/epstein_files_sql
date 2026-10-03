@@ -1,6 +1,6 @@
 import polars as pl
 import re
-from python.defines import LOCAL_FILES_PATHS
+from python.defines.dataset_passport import LOCAL_FILES_PATHS
 from datetime import datetime
 
 

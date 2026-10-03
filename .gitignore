@@ -1,7 +1,4 @@
-data/*
-!data/LICENSE
-!data/README.md
-!data/PROVENANCE.md
+data/
 
 .env
 mnt/

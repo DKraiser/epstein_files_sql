@@ -1,6 +1,6 @@
 import polars as pl
 from pathlib import Path
-from . import defines
+from defines import LOCAL_FILES_PATHS
 
 
 def overview(path: Path) -> None:
@@ -12,7 +12,7 @@ def overview(path: Path) -> None:
     print(df.head())
 
 def main():
-    paths = defines.LOCAL_FILES_PATHS
+    paths = LOCAL_FILES_PATHS
   
     pl.Config.set_tbl_cols(-1)
 

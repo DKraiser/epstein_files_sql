@@ -1,17 +1,16 @@
 """Download selected files from a pinned Hugging Face dataset revision."""
 
 from datetime import datetime, timezone
-import defines
+from defines.dataset_passport import REPOSITORY, REVISION, PROJECT_DATASET_ROOT, LOCAL_FILES_PATHS, REMOTE_FILES_PATHS
 from pathlib import Path
 from huggingface_hub import hf_hub_download
 import hashlib
 import json
 
-
 def generate_manifest_header() -> dict: 
     return { 
-        "repoId": defines.REPOSITORY,
-        "sha256": defines.REVISION,
+        "repoId": REPOSITORY,
+        "sha256": REVISION,
         "downloadDatetime": str(datetime.now(timezone.utc))
     }
 
@@ -24,7 +23,7 @@ def generate_manifest_items(paths: dict[str, list[Path]]) -> dict:
             size = len(file)
             lines = file.count(b"\n")
             
-            manifest_items[str(path).removeprefix(str(f"{defines.PROJECT_DATASET_ROOT}/"))] = {
+            manifest_items[str(path).removeprefix(str(f"{PROJECT_DATASET_ROOT}/"))] = {
                 "sha256": sha256.hexdigest(),
                 "size": size,
                 "lines": lines
@@ -44,19 +43,19 @@ def download(paths: dict[str, list[str]], repo_id: str, repo_rev: str, target_di
             print(f"Downloaded {path}")
 
 def main() -> None:
-    all_paths_remote = defines.REMOTE_FILES_PATHS.copy()
+    all_paths_remote = REMOTE_FILES_PATHS.copy()
     all_paths_remote["administrative"] = ["README.md", "PROVENANCE.md", "LICENSE"]
 
-    all_paths_local = defines.LOCAL_FILES_PATHS.copy()
+    all_paths_local = LOCAL_FILES_PATHS.copy()
     all_paths_local["administrative"] = [
-        defines.PROJECT_DATASET_ROOT / "README.md", 
-        defines.PROJECT_DATASET_ROOT / "PROVENANCE.md", 
-        defines.PROJECT_DATASET_ROOT / "LICENSE"
+        PROJECT_DATASET_ROOT / "README.md", 
+        PROJECT_DATASET_ROOT / "PROVENANCE.md", 
+        PROJECT_DATASET_ROOT / "LICENSE"
     ]
 
-    repo_id = defines.REPOSITORY
-    repo_rev = defines.REVISION
-    target_dir = defines.PROJECT_DATASET_ROOT
+    repo_id = REPOSITORY
+    repo_rev = REVISION
+    target_dir = PROJECT_DATASET_ROOT
 
     download(all_paths_remote, repo_id, repo_rev, target_dir)
 

@@ -2,7 +2,7 @@
 
 Source: the pinned Parquet revision recorded in `data/source_manifest.json`. Target: [`src/sql/schema.sql`](../src/sql/schema.sql). Every source field is represented, including fields that are NULL throughout this revision. Raw columns preserve source notation where parsing is applied; parsed columns hold typed values; every parsing status is a FK to `enum_parse_statuses`. Lookup conversions use exact source labels.
 
-For parse status values: `SUCCESS` = full parse; `PARTIAL` = useful value but incomplete precision; `MISSING` = source SQL NULL; `EMPTY` = exact empty string; `FAILED` = non-empty value failed parsing/validation. Invalid JSON and hashes retain their raw strings and are logged or quarantined by the importer. `SUCCESS` parsing of the JSON text `null` stores JSONB null; SQL NULL remains distinct.
+For parse status values: `success` = full parse; `partial` = useful value but incomplete precision; `null` = source SQL NULL; `empty` = exact empty string; `failed` = non-empty value failed parsing/validation. Invalid JSON and hashes retain their raw strings and are logged or quarantined by the importer. `success` parsing of the JSON text `null` stores JSONB null; SQL NULL remains distinct.
 
 Every ordinary source ID is retained as a source ID. `provenance_files.id` is a local surrogate; `(source_file, source_row)` identifies its row in the pinned input. Relationships use `ON DELETE RESTRICT`, except the model bridge rows, which cascade with their parent run/file.
 
@@ -105,7 +105,7 @@ Every ordinary source ID is retained as a source ID. `provenance_files.id` is a 
 | `route_from` (`String`) | `route_from` `TEXT` | Preserve source value and SQL NULL as provided. |
 | `route_to` (`String`) | `route_to` `TEXT` | Preserve source value and SQL NULL as provided. |
 | `aircraft` (`String`) | `aircraft` `TEXT` | Preserve source value and SQL NULL as provided. |
-| `time_of_day` (`String`) | `time_of_day_raw` `TEXT`, `time_of_day_parsed` `TIME WITHOUT TIME ZONE`, `time_of_day_hour_parsed` `SMALLINT`, `time_of_day_minute_parsed` `SMALLINT`, `time_of_day_status` `SMALLINT` | Parse explicit AM/PM values to TIME. For hour-only or meridiem-free forms, preserve available hour/minute components and mark PARTIAL; do not invent AM/PM or minutes. |
+| `time_of_day` (`String`) | `time_of_day_raw` `TEXT` | Preserve source value and SQL NULL as provided. |
 | `confidence` (`String`) | `confidence_id` `SMALLINT` | Exact source category (`confirmed`/`tentative`) maps to `enum_event_confidences`; it is not a numeric probability. |
 | `narrative` (`String`) | `narrative` `TEXT` | Preserve source value and SQL NULL as provided. |
 
@@ -184,7 +184,7 @@ Every ordinary source ID is retained as a source ID. `provenance_files.id` is a 
 | `status` (`String`) | `run_status` `SMALLINT` | Exact source value maps to `enum_run_statuses`. |
 | `input_dir` (`String`) | `input_dir` `TEXT` | Preserve source value and SQL NULL as provided. |
 | `output_name` (`String`) | `output_name` `TEXT` | Preserve source value and SQL NULL as provided. |
-| `model` (`String`) | `model_raw` `TEXT`, `model_status` `SMALLINT`, rows in `provenance_run_models` (`model_id` FK, `model_ordinal` SMALLINT) | Preserve exact source string; exact lookup in `enum_models`, then one ordered bridge row. Current values are single model names. |
+| `model` (`String`) | `model_raw` `TEXT`, `model_status` `SMALLINT`, rows in `provenance_run_models` (`model_id` FK) | Preserve exact source string; exact lookup in `enum_models`. Current values are single model names. |
 | `dpi` (`Int32`) | `dpi` `INTEGER` | Preserve source value and SQL NULL as provided. |
 | `workers` (`Int32`) | `workers` `INTEGER` | Preserve source value and SQL NULL as provided. |
 | `rpm` (`Int32`) | `rpm` `INTEGER` | Preserve source value and SQL NULL as provided. |
@@ -218,7 +218,7 @@ Every ordinary source ID is retained as a source ID. `provenance_files.id` is a 
 | `api_latency_ms` (`Int64`) | `api_latency_ms` `BIGINT` | Preserve source value and SQL NULL as provided. |
 | `attempts` (`Int32`) | `attempts` `INTEGER` | Preserve source value and SQL NULL as provided. |
 | `error_message` (`String`) | `error_message` `TEXT` | Preserve source value and SQL NULL as provided. |
-| `model_used` (`String`) | `model_used_raw` `TEXT`, `model_used_status` `SMALLINT`, rows in `provenance_file_models` (`model_id` FK, `model_ordinal` SMALLINT) | Preserve exact comma-separated source string; split on comma, trim surrounding whitespace, map each token exactly to `enum_models`, and retain source order with ordinal. The observed individual names map to SUCCESS; an unrecognized token is logged and makes the list PARTIAL if other tokens resolve, otherwise FAILED. |
+| `model_used` (`String`) | `model_used_raw` `TEXT`, `model_used_status` `SMALLINT`, rows in `provenance_file_models` (`model_id` FK) | Preserve exact comma-separated source string; split on comma, trim surrounding whitespace, map each token exactly to `enum_models`. The observed individual names map to SUCCESS; an unrecognized token is logged and makes the list PARTIAL if other tokens resolve, otherwise FAILED. |
 | `validation_score` (`Int32`) | `validation_score` `SMALLINT` | Preserve source value and SQL NULL as provided. |
 
 ## Derived status and relationship values
@@ -230,7 +230,7 @@ Every ordinary source ID is retained as a source ID. `provenance_files.id` is a 
 | `run_status`, `file_status`, `curated_status` | Exact source workflow labels map to `enum_run_statuses`, `enum_file_statuses`, and `enum_curated_statuses`; these are separate from parse outcomes. |
 | `entities.normalized_value_parsed`, `normalization_rule` | No local normalization is performed for this revision. Keep upstream `normalized_value_raw` (all NULL); parsed value and rule remain NULL. If a rule is added, record its name/version, such as a separately approved trim/case-fold rule. |
 | `provenance_run_models` | One ordered model link for each model token in `provenance_runs.model_raw`. |
-| `provenance_file_models` | Split `model_used_raw` on commas, trim each token, exact-match each model, preserve ordinal. Raw combined source label remains stored. |
+| `provenance_file_models` | Split `model_used_raw` on commas, trim each token, exact-match each mode. Raw combined source label remains stored. |
 | `pdf_sha256_parsed`, `output_sha256_parsed` | Validate 64 hexadecimal characters, decode to exactly 32 bytes, store BYTEA. Keep exact source hex in corresponding `_raw` column. |
 | Timezone-less run completion | Store as `completed_at_local_parsed` with PARTIAL. Do not populate `completed_at_parsed` or invent a timezone. |
 
