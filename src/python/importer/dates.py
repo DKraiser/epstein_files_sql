@@ -1,10 +1,8 @@
-import polars as pl
-import re
-from python.shared.dataset_passport import LOCAL_FILES_PATHS
+from literals import ParseStatus
+
 from datetime import datetime
+import re
 
-
-DOCUMENTS_PATHS = LOCAL_FILES_PATHS["documents"]
 
 POSTGRES_DATE_FORMATS = (
     "%Y-%m-%d",     # 2017-3-1
@@ -298,35 +296,6 @@ MONTH_REPLACEMENTS = {
     "Dezember": "Dec",
 }
 
-def is_postgres_date(value: str) -> bool:
-    for fmt in POSTGRES_DATE_FORMATS:
-        try:
-            datetime.strptime(value, fmt)
-            return True
-        except ValueError:
-            pass
-
-    return False
-
-def replace_weekday_month(value: str) -> str:
-    for weekday, replacement in WEEKDAY_REPLACEMENTS.items():
-        value = value.replace(weekday, replacement).replace(weekday.lower(), replacement).replace(weekday.upper(), replacement)
-
-    for month, replacement in MONTH_REPLACEMENTS.items():
-        value = value.replace(month, replacement).replace(month.lower(), replacement).replace(month.upper(), replacement)
-
-    return re.sub(r"(?<=\d)(st|nd|rd|th)\b", "", value, flags=re.IGNORECASE)
-
-def is_parseable_date(value: str) -> bool: 
-    value = replace_weekday_month(value)
-    for fmt in UNAMBIGOUSLY_PARSEABLE_DATE_FORMATS:
-        try:
-            datetime.strptime(value, fmt)
-            return True
-        except ValueError:
-            pass
-
-    return False
 
 def is_ambigously_parseable_date(value: str) -> bool:
     value = replace_weekday_month(value)
@@ -343,59 +312,39 @@ def is_ambigously_parseable_date(value: str) -> bool:
 
     return False
 
-def filekeys_checks() -> None:
-    filekeys = (
-        pl.scan_parquet(DOCUMENTS_PATHS)
-        .select("file_key")
-        .drop_nulls()
-        .collect()["file_key"]
-    )
-    filekeys_list = filekeys.to_list()
+def replace_weekday_month(value: str) -> str:
+    for weekday, replacement in WEEKDAY_REPLACEMENTS.items():
+        value = value.replace(weekday, replacement).replace(weekday.lower(), replacement).replace(weekday.upper(), replacement)
 
-    # All file keys are unique
-    print(f"Count of keys: {len(filekeys_list)}")
-    print(f"Count of unique keys: {len(filekeys.unique().to_list())}")
+    for month, replacement in MONTH_REPLACEMENTS.items():
+        value = value.replace(month, replacement).replace(month.lower(), replacement).replace(month.upper(), replacement)
 
-def dates_checks() -> None:
-    dates = (
-        pl.scan_parquet(DOCUMENTS_PATHS)
-        .select("date")
-        .drop_nulls()
-        .unique()
-        .collect()["date"]
-        .to_list()
-    )
+    return re.sub(r"(?<=\d)(st|nd|rd|th)\b", "", value, flags=re.IGNORECASE)
 
-    valid_dates_count = 0
-    parseable_dates_count = 0
-    ambiguously_parseable_dates_count = 0
-    not_parseable_dates_count = 0
+def parse_unambigously(value: str) -> datetime:
+    """If date can be parsed using any of known formats, return it. Else raise an error."""
 
-    not_parseable_dates = list[str]()
-    for date in dates: 
-        if (is_postgres_date(date)):
-            valid_dates_count += 1
-        elif (is_parseable_date(date)):
-            parseable_dates_count += 1
-        elif (is_ambigously_parseable_date(date)):
-            ambiguously_parseable_dates_count += 1
+    for fmt in (*POSTGRES_DATE_FORMATS, *UNAMBIGOUSLY_PARSEABLE_DATE_FORMATS):
+        try:
+            return datetime.strptime(value, fmt)
+        except:
+            pass
+    
+    raise ValueError("This date cannot be parsed using known formats.")
+
+def parse_date(value: str) -> tuple[datetime | None, ParseStatus]: 
+    """Tuple of parsed datetime and parsing status id is returned"""
+
+    if value is None:
+        return (None, ParseStatus.NULL)
+    elif not value:
+        return (None, ParseStatus.EMPTY)
+
+    try:
+        return (parse_unambigously(value), ParseStatus.SUCCESS)
+    except:
+        if is_ambigously_parseable_date(value):
+            return (None, ParseStatus.PARTIAL)
         else:
-            not_parseable_dates_count += 1
-            not_parseable_dates.append(date)
-
-    print(f"valid_dates_count: {valid_dates_count}")
-    print(f"parseable_dates_count: {parseable_dates_count}")
-    print(f"ambiguously_parseable_dates_count: {ambiguously_parseable_dates_count}")
-    print(f"not_parseable_dates_count: {not_parseable_dates_count}")
-    print()
-    for i in not_parseable_dates:
-        print(i)
-
+            return (None, ParseStatus.FAILED)
     
-
-def main() -> None:
-    # filekeys_checks()
-    dates_checks()
-    
-if (__name__ == "__main__"):
-    main()

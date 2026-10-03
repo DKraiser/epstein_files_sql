@@ -1,7 +1,7 @@
 """Download selected files from a pinned Hugging Face dataset revision."""
 
 from datetime import datetime, timezone
-from defines.dataset_passport import REPOSITORY, REVISION, PROJECT_DATASET_ROOT, LOCAL_FILES_PATHS, REMOTE_FILES_PATHS
+from shared.dataset_passport import REPOSITORY, REVISION, PROJECT_DATASET_ROOT, LOCAL_FILES_PATHS, REMOTE_FILES_PATHS
 from pathlib import Path
 from huggingface_hub import hf_hub_download
 import hashlib

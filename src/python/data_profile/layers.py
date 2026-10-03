@@ -11,7 +11,7 @@ from pathlib import Path
 import re
 import polars as pl
 
-from python.defines import dataset_passport
+from python.shared import dataset_passport
 
 LAYERS = (
     "documents", "entities", "persons", "kg_entities", "kg_relationships",

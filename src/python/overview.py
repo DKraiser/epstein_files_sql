@@ -1,6 +1,6 @@
 import polars as pl
 from pathlib import Path
-from defines import LOCAL_FILES_PATHS
+from shared.dataset_passport import LOCAL_FILES_PATHS 
 
 
 def overview(path: Path) -> None:
