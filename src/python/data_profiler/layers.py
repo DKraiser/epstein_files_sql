@@ -1,6 +1,4 @@
 """Profile the frozen Parquet layers without loading the text corpus at once.
-
-Run: python -m python.data_profile.layers --output observations/layers_profile.json
 """
 
 import argparse

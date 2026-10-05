@@ -1,16 +1,27 @@
 INSERT INTO enum_parse_statuses (status_code) VALUES 
-    ('success'), ('partial'), ('null'), ('failed'), ('empty');
+    ('success'), ('partial'), ('null'), ('failed'), ('empty')
+ON CONFLICT DO NOTHING;
+
 INSERT INTO enum_match_statuses (status_code) VALUES 
-    ('matched'), ('unresolved');
+    ('matched'), ('unresolved')
+ON CONFLICT DO NOTHING;
+
 INSERT INTO enum_run_statuses (status_code) VALUES 
-    ('completed'), ('crashed'), ('interrupted');
+    ('completed'), ('crashed'), ('interrupted')
+ON CONFLICT DO NOTHING;
+
 INSERT INTO enum_file_statuses (status_code) VALUES 
-    ('success'), ('failed');
+    ('success'), ('failed')
+ON CONFLICT DO NOTHING;
+
 INSERT INTO enum_curated_statuses (status_code) VALUES 
-    ('gold');
+    ('gold')
+ON CONFLICT DO NOTHING;
 
 INSERT INTO enum_curated_tiers (tier) VALUES 
-    ('nuclear'), ('critical'), ('high'), ('medium'), ('supporting');
+    ('nuclear'), ('critical'), ('high'), ('medium'), ('supporting')
+ON CONFLICT DO NOTHING;
+
 INSERT INTO enum_models (model_name) VALUES
     ('gemini-2.5-flash'),
     ('gemini-2.5-flash-lite'),
@@ -19,4 +30,5 @@ INSERT INTO enum_models (model_name) VALUES
     ('gpt-4o-mini'),
     ('gpt-5-nano'),
     ('grok-2-vision-latest'),
-    ('tesseract-community');
+    ('tesseract-community')
+ON CONFLICT DO NOTHING;

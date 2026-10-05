@@ -5,6 +5,7 @@ mnt/
 .venv/
 __pycache__/
 observations/
+logs/
 
 .agents/
 .codex/

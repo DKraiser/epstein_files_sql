@@ -1,4 +1,4 @@
-from literals import ParseStatus
+from .literals import ParseStatus
 
 from datetime import datetime
 import re
@@ -303,9 +303,15 @@ def is_ambigously_parseable_date(value: str) -> bool:
         return True
     if re.fullmatch(r"Q[1-4] \d{4}", value):
         return True
+    if re.fullmatch(r"\d{4}\s*[-–/]\s*\d{4}", value):
+        return True
     for fmt in AMBIGOUSLY_PARSEABLE_DATE_FORMATS:
         try:
-            datetime.strptime(value, fmt)
+            if "%Y" not in fmt and "%y" not in fmt:
+                # Test partial notation using a leap year; never return it.
+                datetime.strptime(value + " 2000", fmt + " %Y")
+            else:
+                datetime.strptime(value, fmt)
             return True
         except (ValueError, re.error):
             pass
@@ -327,24 +333,59 @@ def parse_unambigously(value: str) -> datetime:
     for fmt in (*POSTGRES_DATE_FORMATS, *UNAMBIGOUSLY_PARSEABLE_DATE_FORMATS):
         try:
             return datetime.strptime(value, fmt)
-        except:
+        except (ValueError, re.error):
             pass
     
     raise ValueError("This date cannot be parsed using known formats.")
 
-def parse_date(value: str) -> tuple[datetime | None, ParseStatus]: 
-    """Tuple of parsed datetime and parsing status id is returned"""
+def parse(value: str | None) -> tuple[datetime | None, ParseStatus]:
+    """Return a parsed date/timestamp and its explicit parsing outcome."""
 
     if value is None:
         return (None, ParseStatus.NULL)
     elif not value:
         return (None, ParseStatus.EMPTY)
 
+    value = value.strip()
+    if not value:
+        return None, ParseStatus.EMPTY
+
+    # Upstream timestamps include fractional seconds and explicit UTC offsets.
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)?", value):
+        try:
+            return datetime.fromisoformat(value), ParseStatus.SUCCESS
+        except ValueError:
+            return None, ParseStatus.FAILED
+
+    value = replace_weekday_month(value)
+    if is_ambigously_parseable_date(value):
+        return None, ParseStatus.PARTIAL
+
+    # Complete numeric dates with the year last use the dataset's American
+    # month/day convention. Handle them before the general format list so an
+    # invalid American month cannot fall back to a day/month interpretation.
+    # ISO/year-first dates and dates with named months keep their own formats.
+    numeric = re.fullmatch(r"(\d{1,2})[./,\- ](\d{1,2})[./,\- ]'?(\d{2}|\d{4})", value)
+    if numeric:
+        month, day, year = numeric.groups()
+        year_format = "%y" if len(year) == 2 else "%Y"
+        try:
+            return datetime.strptime(f"{month}/{day}/{year}", f"%m/%d/{year_format}"), ParseStatus.SUCCESS
+        except ValueError:
+            return None, ParseStatus.FAILED
+
+    # Undelimited American forms follow the same rule. Trying them explicitly
+    # also avoids strptime interpreting a six-digit date as a short YYYYMMDD.
+    if re.fullmatch(r"\d{6}|\d{8}", value):
+        formats = ("%m%d%y",) if len(value) == 6 else ("%m%d%Y", "%Y%m%d")
+        for fmt in formats:
+            try:
+                return datetime.strptime(value, fmt), ParseStatus.SUCCESS
+            except ValueError:
+                pass
+        return None, ParseStatus.FAILED
+
     try:
         return (parse_unambigously(value), ParseStatus.SUCCESS)
-    except:
-        if is_ambigously_parseable_date(value):
-            return (None, ParseStatus.PARTIAL)
-        else:
-            return (None, ParseStatus.FAILED)
-    
+    except ValueError:
+        return None, ParseStatus.FAILED

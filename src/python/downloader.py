@@ -6,6 +6,7 @@ from pathlib import Path
 from huggingface_hub import hf_hub_download
 import hashlib
 import json
+import polars as pl
 
 def generate_manifest_header() -> dict: 
     return { 
@@ -21,7 +22,7 @@ def generate_manifest_items(paths: dict[str, list[Path]]) -> dict:
             file = path.read_bytes()
             sha256 = hashlib.sha256(file)
             size = len(file)
-            lines = file.count(b"\n")
+            lines = pl.scan_parquet(path).select(pl.len()).collect().item() if path.name.split('.')[-1] == "parquet" else file.count(b"\n")
             
             manifest_items[str(path).removeprefix(str(f"{PROJECT_DATASET_ROOT}/"))] = {
                 "sha256": sha256.hexdigest(),

@@ -31,18 +31,12 @@ python3 -m venv src/.venv && \
     python -m pip install -r src/requirements.txt
 
 # Download needed .parquet files
-python src/python/download.py
+python src/python/downloader.py
 
-# Overview dataset structure
-python src/python/overview.py
+# Create layers_profile.json
+python -m python.data_profiler
 
-# --------------------------------------------------------
-# Manually run `src/sql/schema.sql` and `src/sql/seed.sql` 
+# Import data from dataset
+python -m python.importer
 
-# And import data from dataset
-python src/python/import.py
-
-# Or for Linux/MacOS simply run reimporter script
-./reimport.sh 
-# --------------------------------------------------------
 ```
