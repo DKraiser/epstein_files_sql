@@ -3,7 +3,7 @@
 from .main_constants import PROJECT_ROOT
 
 # Each invocation rebuilds only these task tables in this working schema.
-IMPORT_SCHEMA = "z1_import"
+IMPORT_SCHEMA = "z1_import_optimized"
 BATCH_SIZE = 5_000
 SCHEMA_FILE = PROJECT_ROOT / "src" / "sql" / "schema.sql"
 SEED_FILE = PROJECT_ROOT / "src" / "sql" / "seed.sql"
