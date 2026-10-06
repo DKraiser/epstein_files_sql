@@ -62,7 +62,7 @@ DATE_FIELDS = {
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output", type=Path, default=Path("layers_profile.json"))
+    parser.add_argument("--output", type=Path, default=Path(dataset_passport.PROJECT_ROOT / "observations" / "data_profile.json"))
     args = parser.parse_args()
 
     scans = {}

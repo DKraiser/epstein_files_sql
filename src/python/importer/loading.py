@@ -14,7 +14,10 @@ import psycopg
 from psycopg import sql
 
 from ..shared.importer_constants import BATCH_SIZE
+from ..shared.text_search_constants import SEARCH_VECTOR_COLUMNS
+from ..shared.text_search_limits import FULL_TEXT_SEARCH_MAX_BYTES
 from .layers import Rejected
+from .search_vectors import vector_expression
 from .verification import BRIDGES, identical, verify_batch, verify_counts
 
 
@@ -68,6 +71,32 @@ def write_models(connection, table, entries):
             copy_rows(connection, bridge, [parent, "model_id"], rows)
 
 
+def write_search_vectors(connection, table, entries):
+    """Derive document/chunk vectors in PostgreSQL, retaining the original text.
+
+    COPY cannot evaluate SQL functions, so the text is copied first and these
+    columns are filled by UPDATE under the same savepoint. PostgreSQL's English
+    parser handles token positions, stemming and stop words; Python does not
+    attempt to construct a tsvector. NULL text produces NULL; empty text produces
+    an empty vector. Existing identical source rows use this too, allowing a
+    rerun to fill missing vectors after adding these columns to an older import.
+    Documents above the 1 MiB input limit receive an empty vector without parsing;
+    vector_expression() also supplies this rule to post-write verification.
+    """
+    if table not in SEARCH_VECTOR_COLUMNS or not entries:
+        return
+    _, vector_column = SEARCH_VECTOR_COLUMNS[table]
+    vector, parameters = vector_expression(table)
+    query = sql.SQL("UPDATE {} SET {} = {} WHERE id = ANY(%s) "
+                    "AND {} IS DISTINCT FROM {}").format(
+        sql.Identifier(table), sql.Identifier(vector_column), vector,
+        sql.Identifier(vector_column), vector)
+    # Only rows in this batch are touched. The null-safe comparison avoids
+    # rewriting vectors that are already correct, including on repeat imports.
+    identifiers = list({entry.values["id"] for entry in entries})
+    connection.execute(query, (*parameters, identifiers, *parameters))
+
+
 def write_batch(connection, table, entries, counts, journal):
     """Insert a batch, classify rejected/duplicate rows, and verify accepted ones.
 
@@ -87,6 +116,7 @@ def write_batch(connection, table, entries, counts, journal):
         # Nested transactions are savepoints; the layer remains the unit of commit.
         with connection.transaction():
             copy_rows(connection, table, columns, [tuple(entry.values[name] for name in columns) for entry in entries])
+            write_search_vectors(connection, table, entries)
             write_models(connection, table, entries)
 
         accepted = entries
@@ -107,7 +137,7 @@ def write_batch(connection, table, entries, counts, journal):
                 # PostgreSQL's aborted state, or block subsequent valid rows.
                 with connection.transaction():
                     connection.execute(insert, tuple(entry.values[name] for name in columns))
-        
+                    write_search_vectors(connection, table, [entry])
                     write_models(connection, table, [entry])
             except psycopg.errors.UniqueViolation as error:
                 # An existing primary key is a duplicate only if ALL prepared
@@ -127,10 +157,25 @@ def write_batch(connection, table, entries, counts, journal):
             else:
                 accepted.append(entry)
     
-    # Check both newly inserted and existing identical rows, including model
-    # links. Matching parent columns alone cannot prove its bridge is complete.
+    # Older imports can have matching source values but missing search vectors.
+    # Repair only identical duplicates, never rows quarantined for a conflict.
+    write_search_vectors(connection, table, duplicates)
+
+    # Check both newly inserted and existing identical rows, including vectors
+    # and model links. Matching parent columns alone cannot prove completeness.
     # This runs inside the layer transaction, so verification failure rolls it back.
     verify_batch(connection, table, accepted + duplicates)
+    if table == "documents":
+        for entry in accepted + duplicates:
+            # PostgreSQL enforces the cutoff. This UTF-8 size check is only for
+            # diagnostics; keep full text in its original column, not in the log.
+            size = len(entry.values["full_text"].encode("utf-8"))
+            if size > FULL_TEXT_SEARCH_MAX_BYTES:
+                journal.for_row(entry.location)(
+                    "search_vector_skipped", "full_text_searchvec",
+                    f"Full text is {size} UTF-8 bytes, exceeding {FULL_TEXT_SEARCH_MAX_BYTES}; "
+                    "stored an empty search vector and retained full text",
+                    parsed="", status="empty")
     counts.n_accepted += len(accepted)
     return accepted, sum(len(entry.models) for entry in accepted)
 

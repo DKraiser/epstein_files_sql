@@ -3,7 +3,9 @@
 from psycopg import sql
 from psycopg.types.json import Jsonb
 
+from ..shared.text_search_constants import SEARCH_VECTOR_COLUMNS
 from .parsing import json_value
+from .search_vectors import vector_expression
 
 JSON_COLUMNS = {
     "documents": {"email_fields_parsed"},
@@ -56,7 +58,7 @@ def identical(connection, table, row):
 
 
 def verify_batch(connection, table, entries):
-    """Verify prepared source values/links for new rows and existing duplicates."""
+    """Verify source values, derived vectors and links for new/duplicate rows."""
     if not entries:
         return
     key = "run_id" if table == "provenance_runs" else "id"
@@ -65,6 +67,18 @@ def verify_batch(connection, table, entries):
     actual = read_rows(connection, table, list(entries[0].values), identifiers)
     if actual != expected:
         raise ValueError(f"Stored {table} values differ from accepted source rows")
+    if table in SEARCH_VECTOR_COLUMNS:
+        # Vectors are computed by PostgreSQL rather than present in Parquet.
+        # Compare them against the database's conversion of the verified text,
+        # using the same configuration and size cutoff as loading. IS DISTINCT FROM
+        # also detects an unexpected NULL vector without rejecting NULL text.
+        _, vector_column = SEARCH_VECTOR_COLUMNS[table]
+        vector, parameters = vector_expression(table)
+        query = sql.SQL("SELECT EXISTS (SELECT 1 FROM {} WHERE id = ANY(%s) "
+                        "AND {} IS DISTINCT FROM {})").format(
+            sql.Identifier(table), sql.Identifier(vector_column), vector)
+        if connection.execute(query, (identifiers, *parameters)).fetchone()[0]:
+            raise ValueError(f"Stored {table} search vectors differ from source text")
     if table in BRIDGES:
         bridge, parent_key = BRIDGES[table]
         expected_links = {link for entry in entries for link in entry.models}

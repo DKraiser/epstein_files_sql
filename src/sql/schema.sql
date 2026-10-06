@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS documents (
     has_stamps BOOLEAN,
     file_key TEXT NOT NULL UNIQUE,
     full_text TEXT NOT NULL,
+    full_text_searchvec tsvector,
     date_raw TEXT,
     additional_notes TEXT,
     page_number TEXT,  -- mixed source notation; preserve as text
@@ -75,6 +76,7 @@ CREATE TABLE IF NOT EXISTS chunks (
     char_start INTEGER,
     char_end INTEGER,
     content TEXT,
+    content_searchvec tsvector,
     UNIQUE (document_id, chunk_index)
 );
 
