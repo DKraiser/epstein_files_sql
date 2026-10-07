@@ -11,7 +11,7 @@ import argparse
 from collections import Counter, defaultdict
 import hashlib
 import json
-from shared.dataset_passport import PROJECT_DATASET_ROOT
+from python.shared.dataset_passport import PROJECT_DATASET_ROOT
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]

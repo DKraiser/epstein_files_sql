@@ -1,7 +1,9 @@
 """Benchmark the air FTS query; restore original indexes even on interruption.
 
-Run: src/.venv/bin/python src/python/benchmark.py
+Run: PYTHONPATH=src src/.venv/bin/python -m python.helpers.benchmark
 Uses POSTGRES_* variables from the environment or the project's .env.
+Enables pgcrypto. Search and insertion each have one warm-up and three measured
+runs per variant. Inserted rows and any temporarily removed conflicts roll back.
 Index changes hold table locks until rollback: run on an idle database.
 """
 
@@ -11,6 +13,7 @@ import json
 import os
 from pathlib import Path
 from statistics import mean, median
+from time import perf_counter
 
 from dotenv import load_dotenv
 import psycopg
@@ -20,20 +23,35 @@ from python.shared.importer_constants import IMPORT_SCHEMA
 
 
 TARGETS = {"documents": "full_text_searchvec", "chunks": "content_searchvec"}
-QUERY = """SELECT dc.id
-FROM (
-    SELECT d.id AS id
-    FROM documents AS d
-    WHERE d.full_text_searchvec @@ plainto_tsquery('english', 'air')
-
-    UNION
-
-    SELECT c.document_id AS id
-    FROM chunks AS c
-    WHERE c.content_searchvec @@ plainto_tsquery('english', 'air')
-) AS dc
-ORDER BY dc.id ASC;"""
-EXPLAIN = "EXPLAIN (ANALYZE, BUFFERS, TIMING OFF, FORMAT JSON) "
+QUERY = """WITH selected_ids AS (
+    WITH params AS (
+        SELECT plainto_tsquery('english', 'air') AS query
+    )
+    SELECT DISTINCT dc.id
+    FROM params AS p
+    CROSS JOIN LATERAL (
+        SELECT d.id AS id
+        FROM documents AS d
+        WHERE d.full_text_searchvec @@ p.query
+        UNION ALL
+        SELECT c.document_id AS id
+        FROM chunks AS c
+        WHERE c.content_searchvec @@ p.query
+    ) AS dc
+    ORDER BY dc.id ASC
+)
+SELECT
+    digest(string_agg(si.id::TEXT, ', ' ORDER BY si.id), 'sha256')::TEXT AS hash,
+    count(*) AS count
+FROM selected_ids AS si;"""
+EXPLAIN = "EXPLAIN (FORMAT JSON)"
+INSERT_QUERY = """INSERT INTO chunks (
+    id, document_id, chunk_index, token_count, char_start, char_end,
+    content, content_searchvec
+) VALUES (
+    100000000, 1, 1000000, 0, 0, 0,
+    'Some text chunk', to_tsvector('english', 'Some text chunk')
+);"""
 
 
 def connection_info():
@@ -57,7 +75,8 @@ def target_indexes(connection, schema):
             SELECT ic.relname, am.amname, pg_get_indexdef(i.indexrelid),
                    i.indisvalid AND i.indisready AND i.indnkeyatts = 1
                    AND i.indnatts = 1 AND i.indpred IS NULL
-                   AND i.indexprs IS NULL AND i.indkey[0] = a.attnum AS plain
+                   AND i.indexprs IS NULL AND i.indkey[0] = a.attnum AS plain,
+                   pg_relation_size(i.indexrelid) AS size_bytes
             FROM pg_index i
             JOIN pg_class t ON t.oid = i.indrelid
             JOIN pg_namespace n ON n.oid = t.relnamespace
@@ -74,8 +93,8 @@ def target_indexes(connection, schema):
             ORDER BY ic.relname
         """, (column, schema, table)).fetchall()
         indexes.extend(dict(table=table, name=name, method=method,
-                            definition=definition, plain=plain)
-                       for name, method, definition, plain in rows)
+                            definition=definition, plain=plain, size_bytes=size_bytes)
+                       for name, method, definition, plain, size_bytes in rows)
     return indexes
 
 
@@ -99,16 +118,53 @@ def configure_indexes(connection, schema, variant, original):
     return target_indexes(connection, schema)
 
 
+def benchmark_insertion(connection, variant):
+    runs = []
+    for run in range(4):
+        label = "warm-up" if run == 0 else f"run {run}/3"
+        # Restore conflicting records and remove the sample after every run.
+        with connection.transaction(force_rollback=True):
+            connection.execute("""
+                DELETE FROM chunks
+                WHERE id = 100000000
+            """)
+            if run == 0:
+                plan = connection.execute(EXPLAIN + INSERT_QUERY, prepare=False).fetchone()[0][0]
+            before = perf_counter()
+            cursor = connection.execute(INSERT_QUERY, prepare=False)
+            duration = (perf_counter() - before) * 1000
+            if cursor.rowcount != 1:
+                raise ValueError(f"Expected one inserted row in {variant} insertion {label}")
+        if run == 0:
+            print(f"{variant} insertion warm-up complete", flush=True)
+        else:
+            runs.append(duration)
+            print(f"{variant} insertion {label}: {duration:.3f} ms", flush=True)
+    return {
+        "execution_times_ms": runs, "mean_ms": mean(runs), "median_ms": median(runs),
+        "explain": plan,
+    }
+
+
 def benchmark(connection, schema):
     started = datetime.now(timezone.utc).isoformat()
+    # Initialize outside the forced rollback so pgcrypto stays enabled.
+    connection.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public")
+    crypto_schema = connection.execute("""
+        SELECT n.nspname FROM pg_extension e
+        JOIN pg_namespace n ON n.oid = e.extnamespace
+        WHERE e.extname = 'pgcrypto'
+    """).fetchone()[0]
     # An outer forced rollback restores every DDL change, also on exceptions.
     with connection.transaction(force_rollback=True):
         connection.execute("SET LOCAL lock_timeout = '10s'")
-        connection.execute(sql.SQL("SET LOCAL search_path TO {}, pg_catalog").format(
-            sql.Identifier(schema)))
+        connection.execute(sql.SQL("SET LOCAL search_path TO {}, pg_catalog, {}").format(
+            sql.Identifier(schema), sql.Identifier(crypto_schema)))
         # Stable data and exclusive access to index DDL throughout all variants.
         connection.execute(sql.SQL("LOCK TABLE {}, {} IN ACCESS EXCLUSIVE MODE").format(
             sql.Identifier(schema, "documents"), sql.Identifier(schema, "chunks")))
+        if connection.execute("SELECT 1 FROM documents WHERE id = 1").fetchone() is None:
+            raise ValueError("Insertion benchmark requires documents.id = 1 for chunks.document_id")
         for table in TARGETS:
             connection.execute(sql.SQL("ANALYZE {}").format(sql.Identifier(schema, table)))
         original = target_indexes(connection, schema)
@@ -125,54 +181,66 @@ def benchmark(connection, schema):
                                  "enable_indexscan", "enable_bitmapscan", "random_page_cost",
                                  "effective_cache_size", "statement_timeout")}
         result = {
-            "query": QUERY, "started_at": started,
+            "query": QUERY, "insertion_query": INSERT_QUERY, "started_at": started,
             "postgresql_version": connection.execute("SELECT version()").fetchone()[0],
             "schema": schema, "runs_per_variant": 3, "time_unit": "ms",
-            "metric": "PostgreSQL EXPLAIN ANALYZE Execution Time (TIMING OFF)",
+            "metric": "Client elapsed time for execute and fetchone (perf_counter), including server execution and round trip",
             "methodology": {
                 "variant_order": ["no_index", "gin", "gist"],
-                "warmup_runs": 0, "cache_reset": False,
-                "explain_options": "ANALYZE, BUFFERS, TIMING OFF, FORMAT JSON",
-                "saved_explain_run": 1, "analyze_before_benchmark": True,
+                "warmup_runs": 1, "cache_reset": False,
+                "explain_options": "FORMAT JSON (plan only; does not execute the query)",
+                "analyze_before_benchmark": True,
                 "planner_forced": False, "index_build_time_included": False,
+                "hash_and_count_checked": "Every warm-up and measured run, across all variants",
                 "original_indexes_restored_by_rollback": True,
+                "insertion_metric": "Client elapsed time for INSERT execute (perf_counter), including server execution and round trip",
+                "insertion_setup_and_rollback_included": False,
+                "insertion_conflicts": "Temporarily delete conflicting chunk keys; restore by rollback after each run",
             },
             "tables": tables, "settings": settings, "original_vector_indexes": original,
             "variants": {},
         }
-        row_count = None
+        expected_result = None
         for variant in result["methodology"]["variant_order"]:
             # Reuse original GIN indexes if available; undo each variant's DDL.
             with connection.transaction(force_rollback=True):
                 print(f"Preparing {variant}...", flush=True)
                 indexes = configure_indexes(connection, schema, variant, original)
-                runs, counts, first_plan = [], [], None
-                for run in range(1, 4):
-                    plan = connection.execute(EXPLAIN + QUERY, prepare=False).fetchone()[0][0]
-                    duration = plan["Execution Time"]
-                    count = int(plan["Plan"]["Actual Rows"])
-                    if row_count is None:
-                        row_count = count
-                    if count != row_count:
-                        raise ValueError(f"Result row count changed in {variant} run {run}")
+                plan = connection.execute(EXPLAIN + QUERY, prepare=False).fetchone()[0][0]
+                runs, counts, hashes = [], [], []
+                for run in range(4):
+                    label = "warm-up" if run == 0 else f"run {run}/3"
+                    print(f"Starting {variant} {label}...", flush=True)
+                    before = perf_counter()
+                    query_result = connection.execute(QUERY, prepare=False).fetchone()
+                    duration = (perf_counter() - before) * 1000
+                    if expected_result is None:
+                        expected_result = query_result
+                    if query_result != expected_result:
+                        raise ValueError(
+                            f"Hash/count mismatch in {variant} {label}: "
+                            f"expected {expected_result!r}, got {query_result!r}")
+                    result_hash, count = query_result
+                    if run == 0:
+                        warmup = {"hash": result_hash, "count": count}
+                        print(f"{variant} warm-up complete ({count} IDs)", flush=True)
+                        continue
                     runs.append(duration)
                     counts.append(count)
-                    if first_plan is None:
-                        first_plan = plan
-                    print(f"{variant} run {run}/3: {duration:.3f} ms ({count} rows)", flush=True)
+                    hashes.append(result_hash)
+                    print(f"{variant} {label}: {duration:.3f} ms ({count} IDs)", flush=True)
                 result["variants"][variant] = {
-                    "indexes": indexes, "execution_times_ms": runs,
+                    "indexes": indexes,
+                    "total_index_bytes": sum(index["size_bytes"] for index in indexes),
+                    "warmup": warmup, "execution_times_ms": runs,
                     "mean_ms": mean(runs), "median_ms": median(runs),
-                    "result_rows_per_run": counts, "explain": first_plan,
+                    "result_rows_per_run": counts, "result_hashes_per_run": hashes,
+                    "explain": plan,
+                    "insertion": benchmark_insertion(connection, variant),
                 }
     result["finished_at"] = datetime.now(timezone.utc).isoformat()
     return result
 
-
-def plan_nodes(node):
-    yield node
-    for child in node.get("Plans", []):
-        yield from plan_nodes(child)
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)

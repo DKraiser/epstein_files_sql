@@ -95,12 +95,7 @@ In [src/python/importer/main.py](src/python/importer/main.py), the completion ma
 
 The committed bridge totals are **123** `provenance_run_models` links and **1,388,114** `provenance_file_models` links. These derived links are additional target rows and are excluded from source-row totals.
 
-These are checks evidenced by the successful journal and the current importer implementation, not a fresh live-database audit. The journal does not record the importer Git commit or a dependency snapshot, so historical code identity is not independently established.
-
 ## Reproducibility evidence
-
-
-
 
 From the project root, using Python 3 and no third-party packages:
 
