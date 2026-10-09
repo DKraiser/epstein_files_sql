@@ -1,20 +1,239 @@
--- FTS
--- Without index: 58s
-
-SELECT dc.id
-FROM (
-    SELECT d.id AS id
-        FROM documents as d
-        WHERE d.full_text_searchvec @@ plainto_tsquery('english', 'air')
-    
-    UNION 
-
-    SELECT c.document_id AS id
-        FROM chunks as c
-        WHERE c.content_searchvec @@ plainto_tsquery('english', 'air')
-) AS dc
+-- Q1: Full TS - gin
+WITH params AS (
+    SELECT plainto_tsquery('english', 'air') AS query
+)
+SELECT DISTINCT dc.id
+FROM params as p
+    CROSS JOIN LATERAL (
+        SELECT d.id AS id
+            FROM documents as d
+            WHERE d.full_text_searchvec @@ p.query
+        UNION ALL
+        SELECT c.document_id AS id
+            FROM chunks as c
+            WHERE c.content_searchvec @@ p.query
+    ) AS dc
 ORDER BY dc.id ASC;
 
--- Total creation time: 9 min 1 sec
-CREATE INDEX IF NOT EXISTS idx_documents_full_text_searchvec_gin ON documents USING gin(full_text_searchvec);
-CREATE INDEX IF NOT EXISTS idx_chunks_content_searchvec_gin ON chunks USING gin(content_searchvec);
+
+
+-- Q2: Fuzzy TS - gin_trgm
+WITH params AS (
+    SELECT 
+        current_setting('pg_trgm.word_similarity_threshold')::REAL AS similarity_threshold,
+        'fliht'::TEXT AS searched
+),
+selected_ids AS (
+	SELECT
+	    candidate_rows.id AS document_id,
+	    MAX(candidate_rows.score) AS score
+	FROM params AS p
+	    CROSS JOIN LATERAL (
+	        SELECT 
+	        	d.id AS id,
+	        	word_similarity(p.searched, d.full_text) AS score 
+	        FROM documents AS d
+			WHERE p.searched <% d.full_text
+			UNION ALL
+			SELECT 
+	        	c.document_id AS id,
+	        	word_similarity(p.searched, c.content) AS score 
+	        FROM chunks AS c
+			WHERE p.searched <% c."content"
+	    ) AS candidate_rows 
+	GROUP BY 
+		candidate_rows.id
+)
+SELECT 
+	si.document_id,
+	si.score,
+	d.full_text,
+	p.similarity_threshold,
+	p.searched,
+	'pg_trgm.word_similarity'::TEXT AS "method"
+FROM selected_ids si
+	JOIN documents d ON d.id = si.document_id
+	CROSS JOIN params p
+ORDER BY 
+	si.score DESC, 
+	si.document_id ASC;
+
+
+
+-- Q3: Relational 2-hop - seq scans
+WITH graph_starts_and_intermediates AS (
+	SELECT 
+		ke_starts.id AS start_node_id,
+		kr.id AS start_to_intermediate_edge_id,
+		kr.target_id AS intermediate_node_id
+	FROM kg_entities ke_starts
+		JOIN kg_relationships kr ON kr.source_id = ke_starts.id
+	WHERE NOT EXISTS (
+		SELECT 1
+		FROM kg_relationships kr2 
+		WHERE kr2.target_id = ke_starts.id
+	)
+),
+graph_second_edges_and_possible_ends AS (
+	SELECT 
+		gs.*,
+		kr.id AS intermediate_to_possible_end_edge_id,
+		kr.target_id AS possible_end_node_id
+	FROM graph_starts_and_intermediates gs
+		JOIN kg_relationships kr ON kr.source_id = gs.intermediate_node_id	 
+)
+SELECT 
+	gsepe.*,
+	s_eet."type",
+	s_to_i_ert."type",
+	i_eet."type",
+	i_to_e_ert."type",
+	e_eet."type"
+FROM graph_second_edges_and_possible_ends gsepe
+	JOIN kg_entities s_ke ON s_ke.id = gsepe.start_node_id
+	JOIN kg_entities i_ke ON i_ke.id = gsepe.intermediate_node_id
+	JOIN kg_entities e_ke ON e_ke.id = gsepe.possible_end_node_id 
+	JOIN kg_relationships s_to_i_kr ON s_to_i_kr.id = gsepe.start_to_intermediate_edge_id  
+	JOIN kg_relationships i_to_e_kr ON i_to_e_kr.id = gsepe.intermediate_to_possible_end_edge_id 
+	JOIN enum_kg_entity_types s_eet ON s_eet.id = s_ke.entity_type_id 
+	JOIN enum_kg_entity_types i_eet ON i_eet.id = i_ke.entity_type_id 
+	JOIN enum_kg_entity_types e_eet ON e_eet.id = e_ke.entity_type_id 
+	JOIN enum_relationship_types s_to_i_ert ON s_to_i_ert .id = s_to_i_kr.relationship_type_id  
+	JOIN enum_relationship_types i_to_e_ert ON i_to_e_ert.id = i_to_e_kr.relationship_type_id  
+WHERE NOT EXISTS (
+	SELECT 1
+	FROM kg_relationships kr 
+	WHERE kr.source_id = gsepe.possible_end_node_id 
+)
+ORDER BY
+	gsepe.start_node_id ASC,
+	gsepe.intermediate_node_id ASC,
+	gsepe.possible_end_node_id ASC
+	
+	
+	
+-- Q4: Financial trasactions aggregation
+-- Selected groups of similar cardholders
+-- All cardholders treated as one entity are aggregated to an array
+-- Selected cardholders with total income > 0
+-- WITH RECURSIVE 
+-- params AS (
+-- 	SELECT 
+-- 		0.5::REAL AS similarity_threshold
+-- ),
+-- items AS (
+-- 	SELECT 
+-- 		ROW_NUMBER() OVER (ORDER BY ft.cardholder) AS id,
+-- 		ft.cardholder,
+-- 		SUM(ft.amount) AS total_income,
+-- 		count(*) AS transactions_count
+-- 	FROM financial_transactions ft
+-- 	WHERE ft.cardholder IS NOT NULL
+-- 	GROUP BY ft.cardholder 
+-- 	HAVING SUM(ft.amount) > 0
+-- ),
+-- edges AS (
+--     SELECT 
+--     	a.id AS source, 
+--     	b.id AS "target"
+--     FROM items a
+-- 	CROSS JOIN params p
+--     JOIN items b ON a.id <> b.id 
+--     	AND similarity(LOWER(a.cardholder), LOWER(b.cardholder)) >= p.similarity_threshold
+-- ),
+-- connections AS (
+--     SELECT id AS node, id AS group_id
+--     FROM items
+--     UNION
+--     SELECT e.target, c.group_id
+--     FROM connections c
+--     JOIN edges e ON e.source = c.node
+-- ),
+-- groups AS (
+--     SELECT node, MIN(group_id) AS group_id
+--     FROM connections
+--     GROUP BY node
+-- )
+-- SELECT
+--     ARRAY_AGG(i.cardholder ORDER BY i.cardholder) AS cardholders,
+--     SUM(i.total_income) AS total_income,
+--     SUM(i.transactions_count) AS transactions_count 
+-- FROM groups g
+-- JOIN items i ON i.id = g.node
+-- GROUP BY g.group_id
+-- ORDER BY total_income DESC;
+
+BEGIN;
+
+-- The indexable % operator applies similarity >= 0.5.
+SET LOCAL pg_trgm.similarity_threshold = '0.5';
+
+CREATE TEMP TABLE q4_index_items ON COMMIT DROP AS
+SELECT
+    ROW_NUMBER() OVER (ORDER BY cardholder) AS id,
+    cardholder,
+    SUM(amount) AS total_income,
+    COUNT(*) AS transactions_count
+FROM financial_transactions
+WHERE cardholder IS NOT NULL
+GROUP BY cardholder
+HAVING SUM(amount) > 0;
+
+WITH RECURSIVE edges AS (
+    SELECT a.id AS source, b.id AS target
+    FROM q4_index_items a
+    JOIN q4_index_items b
+      ON a.id <> b.id
+     AND lower(b.cardholder) % lower(a.cardholder)
+),
+connections AS (
+    SELECT id AS node, id AS group_id
+    FROM q4_index_items
+    UNION
+    SELECT e.target, c.group_id
+    FROM connections c
+    JOIN edges e ON e.source = c.node
+),
+groups AS (
+    SELECT node, MIN(group_id) AS group_id
+    FROM connections
+    GROUP BY node
+)
+SELECT
+    ARRAY_AGG(i.cardholder ORDER BY i.cardholder) AS cardholders,
+    SUM(i.total_income) AS total_income,
+    SUM(i.transactions_count) AS transactions_count
+FROM groups g
+JOIN q4_index_items i ON i.id = g.node
+GROUP BY g.group_id
+ORDER BY total_income DESC;
+
+ROLLBACK;
+
+
+
+-- Q5: What models were used for parsing files each day
+SELECT 
+	pf.processed_at_parsed::date AS processing_date,
+	ARRAY_AGG(DISTINCT em.model_name),
+	count(*)	
+FROM provenance_files pf 
+	JOIN provenance_file_models pfm ON pfm.file_id = pf.id
+	JOIN enum_models em ON em.model_id = pfm.model_id
+WHERE pf.processed_at_parsed IS NOT NULL
+GROUP BY
+	pf.processed_at_parsed::date
+ORDER BY processing_date;
+
+
+-- Q6: All emails where subject, sender and recipients are known
+SELECT 
+	d.id,
+	d.full_text 
+FROM documents d 
+	JOIN enum_parse_statuses eps ON d.email_fields_status = eps.status_id
+WHERE 
+	eps.status_id = 1
+	AND d.email_fields_parsed ->> 'subject' NOT ILIKE ALL (ARRAY['%REDACTED%', '%\_\_\_\_%']) 
+	AND d.email_fields_parsed ->> 'from_field' NOT ILIKE ALL (ARRAY['%REDACTED%', '%\_\_\_\_%']) 
+	AND d.email_fields_parsed ->> 'to_field' NOT ILIKE ALL (ARRAY['%REDACTED%', '%\_\_\_\_%']) 
