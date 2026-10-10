@@ -144,7 +144,7 @@ CREATE TABLE IF NOT EXISTS derived_events (
     event_end_date_raw TEXT,
     headline TEXT NOT NULL,
     location TEXT,
-    amount NUMERIC,  -- Decimal(str(source Float64)); no cents rounding
+    amount NUMERIC,
     currency TEXT NOT NULL,
     payer TEXT,  -- retained although NULL throughout this revision
     payee TEXT,

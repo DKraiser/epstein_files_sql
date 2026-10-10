@@ -27,23 +27,23 @@ DROP INDEX IF EXISTS idx_chunks_content_searchvec_gist;
 
 -- Q4
 -- GiST over temporary table existing inside the transaction.
-CREATE INDEX idx_temp_cardholder_gist
+CREATE INDEX IF NOT EXISTS idx_temp_cardholder_gist
     ON q4_index_items USING gist
         (lower(cardholder) gist_trgm_ops(siglen=32));
 
 -- Partial covering B-tree.
-CREATE INDEX idx_financial_transactions_cardholder
+CREATE INDEX IF NOT EXISTS idx_financial_transactions_cardholder
     ON financial_transactions USING btree (cardholder)
     INCLUDE (amount)
     WHERE cardholder IS NOT NULL;
 
 -- Q5: composite covering B-tree. Both columns are index keys.
-CREATE INDEX idx_provenance_files_processed_id_btree
+CREATE INDEX IF NOT EXISTS idx_provenance_files_processed_id_btree
     ON provenance_files USING btree (processed_at_parsed, id)
     WHERE processed_at_parsed IS NOT NULL;
 
 -- Q6: B-tree over email_fields_status. 
-CREATE INDEX idx_documents_email_fields_status_btree
+CREATE INDEX IF NOT EXISTS idx_documents_email_fields_status_btree
     ON documents USING btree (email_fields_status);
 
 -- Extensions
