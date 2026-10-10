@@ -2,8 +2,6 @@
 
 Source: local `data/data/` Parquet shards from revision `133ef9f0a539fafc270cde8fa8638dc38d89968d` (the 56 `*-of-*` files). Counts below are measured from Parquet with Polars 1.44.2. `NULL` counts are source nulls; `empty` means an exact zero-length string and excludes NULL. String maximums are characters. Each `id` distinct count includes the whole layer, not just one shard. No personal text values are printed.
 
-Reproduce the layer statistics and reference checks with `python src/python/data_profile/layers.py --data-root data/data --output observations/layers_profile.json` in an environment with Polars installed. The `documents` date parsing work already started in `src/python/data_profile/documents.py`; the source statistics below supplement it. The `chunks` layer is left as previously analyzed.
-
 ## Overview
 
 | Source layer | Rows | Shards | Compressed bytes | Source ID uniqueness | Main schema decision |

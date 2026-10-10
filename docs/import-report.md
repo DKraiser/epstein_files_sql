@@ -1,6 +1,6 @@
 # Import report
 
-Analyzed run: `logs/20261006T142505176655Z.jsonl`. Source manifest: `data/source_manifest.json`. Machine-readable results: [import_report.json](import_report.json); accounting checks and fingerprints: [import_report_audit.json](import_report_audit.json).
+Analyzed run: `logs/20261006T142505176655Z.jsonl`. Source manifest: `data/source_manifest.json`. Machine-readable results: [import_report.json](import_report.json).
 
 The journal records a **completed** import from **2026-10-06 14:25:05.176822+00:00** to **2026-10-06 18:42:50.691218+00:00** (UTC). All **13 source layers / 56 Parquet shards** match the manifest. **15,725,373 rows were read, 15,725,299 accepted, 74 quarantined, and 0 classified as duplicates.**
 

@@ -1,6 +1,6 @@
 # Author
 
-**Name :** Oles Andrela
+**Name:** Oles Andrela
 
 **AIS ID:** 136166
 
@@ -40,7 +40,7 @@ python -m python.data_profiler --output [data_profile_path]
 python -m python.importer
 
 # Generate import report
-python src/python/import_report.py --log [log_path] --manifest [source_manifest_path] --output [json_report_path]
+python -m python.helpers.import_report --log [log_path] --manifest [source_manifest_path] --output [json_report_path]
 
 # Run benchmark
 python src/python/benchmark.py --schema [schema_name] --output [benchmark_path]

@@ -39,7 +39,7 @@ selected_ids AS (
 	        	c.document_id AS id,
 	        	word_similarity(p.searched, c.content) AS score 
 	        FROM chunks AS c
-			WHERE p.searched <% c."content"
+			WHERE p.searched <<% c."content"
 	    ) AS candidate_rows 
 	GROUP BY 
 		candidate_rows.id
@@ -83,23 +83,8 @@ graph_second_edges_and_possible_ends AS (
 		JOIN kg_relationships kr ON kr.source_id = gs.intermediate_node_id	 
 )
 SELECT 
-	gsepe.*,
-	s_eet."type",
-	s_to_i_ert."type",
-	i_eet."type",
-	i_to_e_ert."type",
-	e_eet."type"
+	gsepe.*
 FROM graph_second_edges_and_possible_ends gsepe
-	JOIN kg_entities s_ke ON s_ke.id = gsepe.start_node_id
-	JOIN kg_entities i_ke ON i_ke.id = gsepe.intermediate_node_id
-	JOIN kg_entities e_ke ON e_ke.id = gsepe.possible_end_node_id 
-	JOIN kg_relationships s_to_i_kr ON s_to_i_kr.id = gsepe.start_to_intermediate_edge_id  
-	JOIN kg_relationships i_to_e_kr ON i_to_e_kr.id = gsepe.intermediate_to_possible_end_edge_id 
-	JOIN enum_kg_entity_types s_eet ON s_eet.id = s_ke.entity_type_id 
-	JOIN enum_kg_entity_types i_eet ON i_eet.id = i_ke.entity_type_id 
-	JOIN enum_kg_entity_types e_eet ON e_eet.id = e_ke.entity_type_id 
-	JOIN enum_relationship_types s_to_i_ert ON s_to_i_ert .id = s_to_i_kr.relationship_type_id  
-	JOIN enum_relationship_types i_to_e_ert ON i_to_e_ert.id = i_to_e_kr.relationship_type_id  
 WHERE NOT EXISTS (
 	SELECT 1
 	FROM kg_relationships kr 
@@ -116,56 +101,8 @@ ORDER BY
 -- Selected groups of similar cardholders
 -- All cardholders treated as one entity are aggregated to an array
 -- Selected cardholders with total income > 0
--- WITH RECURSIVE 
--- params AS (
--- 	SELECT 
--- 		0.5::REAL AS similarity_threshold
--- ),
--- items AS (
--- 	SELECT 
--- 		ROW_NUMBER() OVER (ORDER BY ft.cardholder) AS id,
--- 		ft.cardholder,
--- 		SUM(ft.amount) AS total_income,
--- 		count(*) AS transactions_count
--- 	FROM financial_transactions ft
--- 	WHERE ft.cardholder IS NOT NULL
--- 	GROUP BY ft.cardholder 
--- 	HAVING SUM(ft.amount) > 0
--- ),
--- edges AS (
---     SELECT 
---     	a.id AS source, 
---     	b.id AS "target"
---     FROM items a
--- 	CROSS JOIN params p
---     JOIN items b ON a.id <> b.id 
---     	AND similarity(LOWER(a.cardholder), LOWER(b.cardholder)) >= p.similarity_threshold
--- ),
--- connections AS (
---     SELECT id AS node, id AS group_id
---     FROM items
---     UNION
---     SELECT e.target, c.group_id
---     FROM connections c
---     JOIN edges e ON e.source = c.node
--- ),
--- groups AS (
---     SELECT node, MIN(group_id) AS group_id
---     FROM connections
---     GROUP BY node
--- )
--- SELECT
---     ARRAY_AGG(i.cardholder ORDER BY i.cardholder) AS cardholders,
---     SUM(i.total_income) AS total_income,
---     SUM(i.transactions_count) AS transactions_count 
--- FROM groups g
--- JOIN items i ON i.id = g.node
--- GROUP BY g.group_id
--- ORDER BY total_income DESC;
-
 BEGIN;
 
--- The indexable % operator applies similarity >= 0.5.
 SET LOCAL pg_trgm.similarity_threshold = '0.5';
 
 CREATE TEMP TABLE q4_index_items ON COMMIT DROP AS
@@ -216,7 +153,7 @@ ROLLBACK;
 SELECT 
 	pf.processed_at_parsed::date AS processing_date,
 	ARRAY_AGG(DISTINCT em.model_name),
-	count(*)	
+	count(DISTINCT pf.id)	
 FROM provenance_files pf 
 	JOIN provenance_file_models pfm ON pfm.file_id = pf.id
 	JOIN enum_models em ON em.model_id = pfm.model_id
